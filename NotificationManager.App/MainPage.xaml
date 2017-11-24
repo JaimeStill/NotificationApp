@@ -1,0 +1,57 @@
+﻿<Page
+    x:Class="NotificationManager.App.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:NotificationManager.App"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <TextBlock Grid.Row="0" FontSize="28" FontWeight="Bold" Text="Notification Hub" Margin="10" />
+        <StackPanel Orientation="Horizontal" Grid.Row="1" Height="Auto">
+            <TextBlock Name="txtSocketUri" Text="Socket URI: ws://notificationsocketsapi.azurewebsites.net/notifications" VerticalAlignment="Center" Margin="10 0" />
+            <CommandBar Background="Transparent" DefaultLabelPosition="Right" FlowDirection="LeftToRight" Margin="10 0">
+                <AppBarButton Name="btnConnection" Click="ConfigureSocket" Label="Connect">
+                    <AppBarButton.Icon>
+                        <SymbolIcon Symbol="ZeroBars" Foreground="Red" />
+                    </AppBarButton.Icon>
+                </AppBarButton>
+                <AppBarButton Name="btnTrigger" Click="TriggerToast"  Label="Trigger Toast">
+                    <AppBarButton.Icon>
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE7E7;" />
+                    </AppBarButton.Icon>
+                </AppBarButton>
+                <AppBarButton Name="btnSend" Label="Send Toast" Click="SendToast" Icon="Send"></AppBarButton>
+                <AppBarButton Label="Clear Diagnostics" Click="ClearDiagnostics" Icon="Delete"></AppBarButton>
+                <AppBarButton Label="Background Tasks" Click="ShowBackgroundTasks" Icon="Flag"></AppBarButton>
+            </CommandBar>
+        </StackPanel>
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox Name="txtMessage" Text="Send a test message to the server" Grid.Column="0" Margin="10" VerticalAlignment="Center" KeyDown="CheckEnter" />
+            <Button Grid.Column="1" Name="btnTest" Margin="10" Click="TestSocket">Test Socket</Button>
+        </Grid>
+        <Grid Grid.Row="3">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock FontWeight="Bold" FontSize="24" Margin="10" Grid.Row="0">Diagnostics</TextBlock>
+            <ScrollViewer Grid.Row="1" Background="#212121" Padding="4">
+                <TextBlock FontFamily="Consolas" FontSize="12" FontWeight="Bold" Name="txtDebug" TextWrapping="WrapWholeWords" IsTextSelectionEnabled="True"
+                           LineStackingStrategy="BlockLineHeight" ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.VerticalScrollMode="Enabled"
+                           ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.IsVerticalRailEnabled="True" Foreground="Green" />
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</Page>

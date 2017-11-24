@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3" IgnorableNamespaces="uap mp">
+  <Identity Name="958bc4a3-3f9b-4868-9081-98baa27792dd" Publisher="CN=jpsti" Version="1.0.0.0" />
+  <mp:PhoneIdentity PhoneProductId="958bc4a3-3f9b-4868-9081-98baa27792dd" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
+  <Properties>
+    <DisplayName>NotificationManager.App</DisplayName>
+    <PublisherDisplayName>jpsti</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Universal" MinVersion="10.0.0.0" MaxVersionTested="10.0.0.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="x-generate" />
+  </Resources>
+  <Applications>
+    <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="NotificationManager.App.App">
+      <uap:VisualElements DisplayName="Notification Hub" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" Description="Test Notification Hub App" BackgroundColor="transparent">
+        <uap:LockScreen Notification="badge" BadgeLogo="Assets\BadgeLogo.png" />
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" ShortName="Notification Hub">
+        </uap:DefaultTile>
+        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <Extension Category="windows.backgroundTasks" Executable="$targetnametoken$.exe" EntryPoint="NotificationManager.Tasks.ToastTask">
+          <BackgroundTasks>
+            <Task Type="general" />
+          </BackgroundTasks>
+        </Extension>
+        <Extension Category="windows.backgroundTasks" Executable="$targetnametoken$.exe" EntryPoint="NotificationManager.Tasks.PushNotifyTask">
+          <BackgroundTasks>
+            <Task Type="controlChannel" />
+          </BackgroundTasks>
+        </Extension>
+        <Extension Category="windows.backgroundTasks" Executable="$targetnametoken$.exe" EntryPoint="NotificationManager.Tasks.NetworkChangeTask">
+          <BackgroundTasks>
+            <Task Type="controlChannel" />
+            <Task Type="systemEvent" />
+          </BackgroundTasks>
+        </Extension>
+        <Extension Category="windows.backgroundTasks" Executable="$targetnametoken$.exe" EntryPoint="Windows.Networking.Sockets.WebSocketKeepAlive">
+          <BackgroundTasks>
+            <Task Type="controlChannel" />
+          </BackgroundTasks>
+        </Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <Capability Name="internetClient" />
+    <Capability Name="privateNetworkClientServer" />
+    <Capability Name="internetClientServer" />
+  </Capabilities>
+</Package>
