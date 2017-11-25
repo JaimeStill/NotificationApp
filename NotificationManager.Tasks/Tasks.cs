@@ -99,12 +99,13 @@ namespace NotificationManager.Tasks
                 {
                     var appContext = CoreApplication.Properties[channelId] as AppContext;
 
-                    bool result = AppContext.Dequeue(out string messageReceived);
+                    // TODO: Update logic for processing messages after Dequque
+                    bool result = AppContext.Dequeue(out Message messageReceived);
 
                     if (result)
                     {
-                        Diag.DebugPrint("Message: " + messageReceived);
-                        InvokeSimpleToast(messageReceived);
+                        Diag.DebugPrint("Message: " + messageReceived.data);
+                        InvokeSimpleToast(messageReceived.data);
                     }
                     else
                     {

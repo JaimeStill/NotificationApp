@@ -207,6 +207,7 @@ namespace NotificationManager.App
 
                     if (result)
                     {
+                        ConfigureInvocations();
                         SetConnected();
                     }
                     else
@@ -219,6 +220,20 @@ namespace NotificationManager.App
             {
                 Diag.DebugPrint("ConfigurePushNotifications failed: " + ex.Message);
                 SetDisconnected();
+            }
+        }
+
+        void ConfigureInvocations()
+        {
+            commModule.On("send", PushNotification);
+        }
+
+        void PushNotification(IList<object> args)
+        {
+            if (args.Count > 0)
+            {
+                var notification = JsonConvert.DeserializeObject<Notification>(args[0] as string);
+                notification.SendToast();
             }
         }
 

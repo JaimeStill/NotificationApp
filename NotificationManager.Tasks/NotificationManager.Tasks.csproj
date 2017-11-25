@@ -108,6 +108,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="CommModule.cs" />
+    <Compile Include="InvocationDescriptor.cs" />
+    <Compile Include="Message.cs" />
     <Compile Include="Notification.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Tasks.cs" />

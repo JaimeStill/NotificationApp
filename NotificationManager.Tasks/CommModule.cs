@@ -2,6 +2,7 @@
 using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Windows.ApplicationModel.Background;
 using Windows.ApplicationModel.Core;
@@ -15,8 +16,9 @@ namespace NotificationManager.Tasks
 {
     public sealed class CommModule : IDisposable
     {
+        public string ConnectionId { get; set; }
         const int TIMEOUT = 30000;
-        const int MAX_BUFFER_LENGTH = 1000;
+        const int MAX_BUFFER_LENGTH = 1024 * 4;
 
         StreamWebSocket socket;
         public ControlChannelTrigger channel { get; set; }
@@ -24,6 +26,8 @@ namespace NotificationManager.Tasks
         DataReader reader;
         DataWriter writer;
         public bool disconnected { get; set; }
+
+        private Dictionary<string, InvocationHandler> handlers = new Dictionary<string, InvocationHandler>();
 
         public CommModule()
         {
@@ -41,6 +45,7 @@ namespace NotificationManager.Tasks
             lock(this)
             {
                 disconnected = true;
+                handlers = new Dictionary<string, InvocationHandler>();
 
                 if (reader != null)
                 {
@@ -70,6 +75,7 @@ namespace NotificationManager.Tasks
 
                 if (socket != null)
                 {
+                    socket.Close(1000, "Socket Reset");
                     socket.Dispose();
                     socket = null;
                 }
@@ -102,6 +108,7 @@ namespace NotificationManager.Tasks
 
                     if (socket != null)
                     {
+                        socket.Close(1001, "Failed to sign on and connect");
                         socket.Dispose();
                         socket = null;
                         reader = null;
@@ -224,31 +231,17 @@ namespace NotificationManager.Tasks
                 return;
             }
 
-            string message = readPacket.ReadString(buffLen);
-            Diag.DebugPrint("Received Buffer: " + message);
+            string serializedMessage = readPacket.ReadString(buffLen);
+            var message = JsonConvert.DeserializeObject<Message>(serializedMessage);
 
-            InvokeSimpleToast(message);
+            Diag.DebugPrint("Received Buffer: " + serializedMessage);
+
+            ReceiveMessage(message);
 
             AppContext.Enqueue(message);
 
             PostSocketRead(MAX_BUFFER_LENGTH);
             Diag.DebugPrint("OnDataReadCompletion Exit");
-        }
-
-        void InvokeSimpleToast(string message)
-        {
-            if (message.StartsWith("{"))
-            {
-                try
-                {
-                    var notification = JsonConvert.DeserializeObject<Notification>(message);
-                    notification.SendToast();
-                }
-                catch
-                {
-                    return;
-                }
-            }
         }
 
         bool PostSocketRead(int length)
@@ -332,6 +325,53 @@ namespace NotificationManager.Tasks
         {
             return channel;
         }
+
+        void InvokeSimpleToast(string message)
+        {
+            if (message.StartsWith("{"))
+            {
+                try
+                {
+                    var notification = JsonConvert.DeserializeObject<Notification>(message);
+                    notification.SendToast();
+                }
+                catch
+                {
+                    return;
+                }
+            }
+        }
+
+        public void On(string methodName, HandlerEvent handler)
+        {
+            if (handlers.ContainsKey(methodName))
+                return;
+
+            var invocationHandler = new InvocationHandler(handler, new Type[] { });
+            handlers.Add(methodName, invocationHandler);
+        }
+
+        private void Invoke(InvocationDescriptor invocationDescriptor)
+        {
+            var invocationHandler = handlers[invocationDescriptor.methodName];
+            if (invocationHandler != null)
+                invocationHandler.handler(invocationDescriptor.arguments);
+        }
+
+        private void ReceiveMessage(Message message)
+        {
+            switch (message.messageType)
+            {
+                case MessageType.Text:
+                case MessageType.ConnectionEvent:
+                    Diag.DebugPrint($"Received a text message: {message.data}");
+                    break;
+                case MessageType.ClientMethodInvocation:
+                    var descriptor = JsonConvert.DeserializeObject<InvocationDescriptor>(message.data);
+                    Invoke(descriptor);
+                    break;
+            }
+        }
     }
 
     public sealed class AppContext
@@ -340,7 +380,7 @@ namespace NotificationManager.Tasks
         public ControlChannelTrigger Channel { get; set; }
         public string ChannelId { get; set; }
         public CommModule CommInstance { get; set; }
-        static ConcurrentQueue<string> messageQueue;
+        static ConcurrentQueue<Message> messageQueue;
 
         public AppContext(CommModule commInstance, StreamWebSocket webSocket, ControlChannelTrigger channel, string id)
         {
@@ -348,15 +388,15 @@ namespace NotificationManager.Tasks
             Channel = channel;
             ChannelId = id;
             CommInstance = commInstance;
-            messageQueue = new ConcurrentQueue<string>();
+            messageQueue = new ConcurrentQueue<Message>();
         }
 
-        public static void Enqueue(string message)
+        public static void Enqueue(Message message)
         {
             messageQueue.Enqueue(message);
         }
 
-        public static bool Dequeue(out string message)
+        public static bool Dequeue(out Message message)
         {
             var result = messageQueue.TryDequeue(out message);
             return result;
