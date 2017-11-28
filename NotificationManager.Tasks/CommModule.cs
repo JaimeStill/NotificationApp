@@ -2,104 +2,38 @@
 using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Threading.Tasks;
-using Windows.ApplicationModel.Background;
 using Windows.ApplicationModel.Core;
-using Windows.Data.Xml.Dom;
 using Windows.Foundation;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
-using Windows.UI.Notifications;
 
 namespace NotificationManager.Tasks
 {
     public sealed class CommModule : IDisposable
     {
-        public string ConnectionId { get; set; }
-        const int TIMEOUT = 30000;
         const int MAX_BUFFER_LENGTH = 1024 * 4;
 
         StreamWebSocket socket;
-        public ControlChannelTrigger channel { get; set; }
-        public string socketUri { get; set; }
         DataReader reader;
-        DataWriter writer;
-        public bool disconnected { get; set; }
+        public ControlChannelTrigger channel { get; set; }
+        bool disconnected = false;
+        public string socketUri { get; set; }
 
-        private Dictionary<string, InvocationHandler> handlers = new Dictionary<string, InvocationHandler>();
+        InvocationManager actions = new InvocationManager();
 
-        public CommModule()
-        {
-            disconnected = false;
-        }
+        public CommModule() { }
 
-        public void Dispose()
-        {
-            Reset();
-            GC.SuppressFinalize(this);
-        }
+        public void RegisterAction(string methodName, HandlerEvent action) => actions.On(methodName, action);
 
-        public void Reset()
-        {
-            lock(this)
-            {
-                disconnected = true;
-                handlers = new Dictionary<string, InvocationHandler>();
+        public void Invoke(Message message) => actions.ReceiveMessage(message);
 
-                if (reader != null)
-                {
-                    try
-                    {
-                        reader.DetachStream();
-                        reader = null;
-                    }
-                    catch (Exception ex)
-                    {
-                        Diag.DebugPrint("Could not detach DataReader: " + ex.Message);
-                    }
-                }
-
-                if (writer != null)
-                {
-                    try
-                    {
-                        writer.DetachStream();
-                        writer = null;
-                    }
-                    catch (Exception ex)
-                    {
-                        Diag.DebugPrint("Could not detach DataWriter: " + ex.Message);
-                    }
-                }
-
-                if (socket != null)
-                {
-                    socket.Close(1000, "Socket Reset");
-                    socket.Dispose();
-                    socket = null;
-                }
-
-                if (channel != null)
-                {
-                    if (CoreApplication.Properties.ContainsKey(channel.ControlChannelTriggerId))
-                        CoreApplication.Properties.Remove(channel.ControlChannelTriggerId);
-
-                    channel.Dispose();
-                    channel = null;
-                }
-
-                Diag.DebugPrint("CommModule has been reset.");
-            }
-        }
-
-        public bool SetupTransport(string serviceUri)
+        public bool SetupTransport(string socketUri)
         {
             bool result = false;
             lock (this)
             {
-                socketUri = serviceUri;
-
+                this.socketUri = socketUri;
                 result = RegisterWithControlChannelTrigger(socketUri);
 
                 if (result == false)
@@ -125,7 +59,7 @@ namespace NotificationManager.Tasks
             return result;
         }
 
-        public bool RegisterWithControlChannelTrigger(string socketUri)
+        bool RegisterWithControlChannelTrigger(string socketUri)
         {
             Task<bool> registerTask = RegisterWithCCTHelper(socketUri);
             return registerTask.Result;
@@ -136,80 +70,56 @@ namespace NotificationManager.Tasks
             bool result = false;
             socket = new StreamWebSocket();
 
-            const int serverKeepAliveInterval = 30;
-            const string channelId = "notifications";
-            const string WebSocketKeepAliveTask = "Windows.Networking.Sockets.WebSocketKeepAlive";
+            channel = channel.RegisterChannel();
 
-            Diag.DebugPrint("RegisterWithCCTHelper Starting...");
-            ControlChannelTriggerStatus status;
-            Diag.DebugPrint("Create ControlChannelTrigger ...");
-
-            try
-            {
-                channel = new ControlChannelTrigger(channelId, serverKeepAliveInterval, ControlChannelTriggerResourceType.RequestHardwareSlot);
-            }
-            catch (UnauthorizedAccessException ex)
-            {
-                Diag.DebugPrint("Please add the app to the lock screen. " + ex.Message);
+            if (channel == null)
                 return result;
-            }
 
-            Uri serverSocket;
+            var socketServer = socketUri.CreateSocketServerUri();
 
-            try
-            {
-                serverSocket = new Uri(socketUri);
-            }
-            catch (Exception ex)
-            {
-                Diag.DebugPrint("Error creating URI: " + ex.Message);
+            if (socketServer == null)
                 return result;
-            }
 
-            var keepAliveBuilder = new BackgroundTaskBuilder();
-            keepAliveBuilder.Name = "KeepaliveTaskForNotifications";
-            keepAliveBuilder.TaskEntryPoint = WebSocketKeepAliveTask;
-            keepAliveBuilder.SetTrigger(channel.KeepAliveTrigger);
-            keepAliveBuilder.Register();
-
-            var pushNotifyBuilder = new BackgroundTaskBuilder();
-            pushNotifyBuilder.Name = "PushNotificationTask";
-            pushNotifyBuilder.TaskEntryPoint = "NotificationManager.Tasks.PushNotifyTask";
-            pushNotifyBuilder.SetTrigger(channel.PushNotificationTrigger);
-            pushNotifyBuilder.Register();
-
-            Diag.DebugPrint("Calling UsingTransport() ...");
+            channel.RegisterBackgroundTasks();
 
             try
             {
-                channel.UsingTransport(socket);
+                await ConnectSocketChannel(socketUri: socketServer);
+                UpdateCoreApplicationProperties();
 
-                await socket.ConnectAsync(serverSocket);
+                PostSocketRead(MAX_BUFFER_LENGTH);
 
-                Diag.DebugPrint("Connected");
-
-                status = channel.WaitForPushEnabled();
-
-                Diag.DebugPrint("WaitForPushEnabled() completed with status: " + status);
-
-                if (status != ControlChannelTriggerStatus.HardwareSlotAllocated && status != ControlChannelTriggerStatus.SoftwareSlotAllocated)
-                    throw new Exception($"Neither hardware nor software slot could be allocated. ChannelStatus is {status.ToString()}");
-
-                CoreApplication.Properties.Remove(channel.ControlChannelTriggerId);
-
-                var appContext = new AppContext(this, socket, channel, channel.ControlChannelTriggerId);
-                CoreApplication.Properties.Add(channel.ControlChannelTriggerId, appContext);
-
-                result = PostSocketRead(MAX_BUFFER_LENGTH);
+                result = true;
 
                 Diag.DebugPrint("RegisterWithCCTHelper Completed");
             }
             catch (Exception ex)
             {
                 Diag.DebugPrint("RegisterWithCCTHelper Task failed with: " + ex.Message);
+                return false;
             }
 
             return result;
+        }
+
+        private async Task ConnectSocketChannel(Uri socketUri)
+        {
+            Diag.DebugPrint("Calling UsingTransport() ...");
+            channel.UsingTransport(socket);
+            await socket.ConnectAsync(socketUri);
+            Diag.DebugPrint("Connected");
+            var status = channel.WaitForPushEnabled();
+            Diag.DebugPrint("WaitForPushEnabled() completed with status: " + status);
+
+            if (status != ControlChannelTriggerStatus.HardwareSlotAllocated && status != ControlChannelTriggerStatus.SoftwareSlotAllocated)
+                throw new Exception($"Neither hardware nor software slot could be allowcated. ChannelStatus is {status.ToString()}");
+        }
+
+        private void UpdateCoreApplicationProperties()
+        {
+            CoreApplication.Properties.Remove(channel.ControlChannelTriggerId);
+            var appContext = new AppContext(this, socket, channel, channel.ControlChannelTriggerId);
+            CoreApplication.Properties.Add(channel.ControlChannelTriggerId, appContext);
         }
 
         public void OnDataReadCompletion(uint bytesRead, DataReader readPacket)
@@ -236,7 +146,7 @@ namespace NotificationManager.Tasks
 
             Diag.DebugPrint("Received Buffer: " + serializedMessage);
 
-            ReceiveMessage(message);
+            actions.ReceiveMessage(message);
 
             AppContext.Enqueue(message);
 
@@ -276,7 +186,7 @@ namespace NotificationManager.Tasks
                             }
                             break;
                         case AsyncStatus.Canceled:
-                            break;                        
+                            break;
                     }
                 };
             }
@@ -290,86 +200,49 @@ namespace NotificationManager.Tasks
             return result;
         }
 
-        public async void SendMessage(string message)
+        public void Dispose()
         {
-            if (socket == null)
+            Reset();
+            GC.SuppressFinalize(this);
+        }
+
+        public void Reset()
+        {
+            lock (this)
             {
-                Diag.DebugPrint("Please setup connection with the server first.");
-                return;
-            }
-            try
-            {
-                if (writer == null)
+                disconnected = true;
+                actions = new InvocationManager();
+
+                if (reader != null)
                 {
-                    writer = new DataWriter(socket.OutputStream);
+                    try
+                    {
+                        reader.DetachStream();
+                        reader = null;
+                    }
+                    catch (Exception ex)
+                    {
+                        Diag.DebugPrint("Could not detach DataReader: " + ex.Message);
+                    }
                 }
-                Diag.DebugPrint("Sending message to server: " + message);
 
-                writer.UnicodeEncoding = UnicodeEncoding.Utf8;
-                writer.WriteString(message);
-
-                await writer.StoreAsync();
-            }
-            catch (Exception ex)
-            {
-                Diag.DebugPrint("Failed to write into the streamwebsocket: " + ex.Message);
-            }
-        }
-
-        public string GetSocketUri()
-        {
-            return socketUri;
-        }
-
-        public ControlChannelTrigger GetChannel()
-        {
-            return channel;
-        }
-
-        void InvokeSimpleToast(string message)
-        {
-            if (message.StartsWith("{"))
-            {
-                try
+                if (socket != null)
                 {
-                    var notification = JsonConvert.DeserializeObject<Notification>(message);
-                    notification.SendToast();
+                    socket.Close(1000, "Socket Reset");
+                    socket.Dispose();
+                    socket = null;
                 }
-                catch
+
+                if (channel != null)
                 {
-                    return;
+                    if (CoreApplication.Properties.ContainsKey(channel.ControlChannelTriggerId))
+                        CoreApplication.Properties.Remove(channel.ControlChannelTriggerId);
+
+                    channel.Dispose();
+                    channel = null;
                 }
-            }
-        }
 
-        public void On(string methodName, HandlerEvent handler)
-        {
-            if (handlers.ContainsKey(methodName))
-                return;
-
-            var invocationHandler = new InvocationHandler(handler, new Type[] { });
-            handlers.Add(methodName, invocationHandler);
-        }
-
-        private void Invoke(InvocationDescriptor invocationDescriptor)
-        {
-            var invocationHandler = handlers[invocationDescriptor.methodName];
-            if (invocationHandler != null)
-                invocationHandler.handler(invocationDescriptor.arguments);
-        }
-
-        private void ReceiveMessage(Message message)
-        {
-            switch (message.messageType)
-            {
-                case MessageType.Text:
-                case MessageType.ConnectionEvent:
-                    Diag.DebugPrint($"Received a text message: {message.data}");
-                    break;
-                case MessageType.ClientMethodInvocation:
-                    var descriptor = JsonConvert.DeserializeObject<InvocationDescriptor>(message.data);
-                    Invoke(descriptor);
-                    break;
+                Diag.DebugPrint("CommModule has been reset.");
             }
         }
     }

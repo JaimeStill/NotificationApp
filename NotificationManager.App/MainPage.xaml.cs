@@ -225,7 +225,7 @@ namespace NotificationManager.App
 
         void ConfigureInvocations()
         {
-            commModule.On("send", PushNotification);
+            commModule.RegisterAction("Send", PushNotification);
         }
 
         void PushNotification(IList<object> args)

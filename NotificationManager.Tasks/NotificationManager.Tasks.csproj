@@ -107,8 +107,9 @@
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="RegistrationExtensions.cs" />
     <Compile Include="CommModule.cs" />
-    <Compile Include="InvocationDescriptor.cs" />
+    <Compile Include="Invocation.cs" />
     <Compile Include="Message.cs" />
     <Compile Include="Notification.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
