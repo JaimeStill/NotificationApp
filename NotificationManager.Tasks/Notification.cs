@@ -55,7 +55,7 @@ namespace NotificationManager.Tasks
                 Visual = visual,
                 Launch = new QueryString()
                 {
-                    launch.ToString()
+                    { launch.Key, launch.Value }
                 }.ToString()
             };
 

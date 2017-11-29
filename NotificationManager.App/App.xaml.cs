@@ -1,12 +1,16 @@
-﻿using System;
+﻿using DiagnosticsHelper;
+using Microsoft.QueryStringDotNET;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
+using Windows.ApplicationModel.Background;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
+using Windows.UI.Notifications;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
@@ -94,6 +98,74 @@ namespace NotificationManager.App
         {
             var deferral = e.SuspendingOperation.GetDeferral();
             //TODO: Save application state and stop any background activity
+            deferral.Complete();
+        }
+
+        protected override async void OnActivated(IActivatedEventArgs args)
+        {
+            base.OnActivated(args);
+
+            if (args is ToastNotificationActivatedEventArgs)
+            {
+                var toastActivationArgs = args as ToastNotificationActivatedEventArgs;
+
+                QueryString query = QueryString.Parse(toastActivationArgs.Argument);
+
+                if (query["uri"] != null)
+                {
+                    await Windows.System.Launcher.LaunchUriAsync(new Uri(query["uri"]));
+                }
+            }
+        }
+
+        protected override async void OnBackgroundActivated(BackgroundActivatedEventArgs e)
+        {
+            base.OnBackgroundActivated(e);
+
+            var deferral = e.TaskInstance.GetDeferral();
+
+            switch (e.TaskInstance.Task.Name)
+            {
+                case "ToastTask":
+                    try
+                    {
+                        Diag.DebugPrint("ToastTask Starting...");
+
+                        e.TaskInstance.Canceled += new BackgroundTaskCanceledEventHandler((sender, reason) =>
+                        {
+                            deferral.Complete();
+                        });
+
+                        var details = e.TaskInstance.TriggerDetails as ToastNotificationActionTriggerDetail;
+
+                        if (details != null)
+                        {
+                            var args = QueryString.Parse(details.Argument);
+
+                            if (args["uri"] != null)
+                            {
+                                Diag.DebugPrint("ToastTask: Launching URI - " + args["uri"]);
+                                await Windows.System.Launcher.LaunchUriAsync(new Uri(args["uri"]));
+                            }
+                            else
+                            {
+                                Diag.DebugPrint("ToastTask: No launch URI found for this toast");
+                            }
+                        }
+                        else
+                        {
+                            Diag.DebugPrint("ToastTask: No Trigger Details found for this task");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Diag.DebugPrint("ToastTask failed with: " + ex.Message);
+                    }
+                    break;
+                default:
+                    break;
+            }
+
             deferral.Complete();
         }
     }

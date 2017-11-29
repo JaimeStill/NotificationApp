@@ -22,11 +22,6 @@
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
       <Extensions>
-        <Extension Category="windows.backgroundTasks" Executable="$targetnametoken$.exe" EntryPoint="NotificationManager.Tasks.ToastTask">
-          <BackgroundTasks>
-            <Task Type="general" />
-          </BackgroundTasks>
-        </Extension>
         <Extension Category="windows.backgroundTasks" Executable="$targetnametoken$.exe" EntryPoint="NotificationManager.Tasks.PushNotifyTask">
           <BackgroundTasks>
             <Task Type="controlChannel" />

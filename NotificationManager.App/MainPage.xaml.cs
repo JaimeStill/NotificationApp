@@ -260,13 +260,14 @@ namespace NotificationManager.App
         {
             try
             {
-                var builder = new BackgroundTaskBuilder();
                 var trigger = new ToastNotificationActionTrigger();
                 var condition = new SystemCondition(SystemConditionType.InternetAvailable);
+
+                var builder = new BackgroundTaskBuilder();
+                builder.Name = "ToastTask";
                 builder.SetTrigger(trigger);
                 builder.AddCondition(condition);
-                builder.TaskEntryPoint = "NotificationManager.Tasks.ToastTask";
-                builder.Name = "ToastTask";
+
                 var task = builder.Register();
             }
             catch (Exception ex)
